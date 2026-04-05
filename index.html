@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Reviews Widget — Live Preview &amp; Embed Code</title>
+  <style>
+    /* ======== Reset & Base ======== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --page-bg: #F7F7F8;
+      --surface: #FFFFFF;
+      --text: #1a1a1a;
+      --text-muted: #6b7280;
+      --accent: #4285F4;
+      --accent-hover: #3367D6;
+      --border: #E5E7EB;
+      --code-bg: #1E1E2E;
+      --code-text: #CDD6F4;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      --radius: 12px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--page-bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ======== Header / Hero ======== */
+    .hero {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+      padding: 64px 24px 56px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(ellipse at 30% 50%, rgba(66,133,244,0.12) 0%, transparent 60%),
+                  radial-gradient(ellipse at 70% 50%, rgba(251,191,36,0.08) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .hero-content {
+      position: relative;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.85);
+      margin-bottom: 24px;
+      backdrop-filter: blur(4px);
+    }
+    .hero-badge svg {
+      width: 16px;
+      height: 16px;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+    .hero h1 span {
+      background: linear-gradient(90deg, #4285F4, #FBBF24);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 17px;
+      color: rgba(255,255,255,0.7);
+      max-width: 540px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ======== Main Layout ======== */
+    .main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ======== Config Panel ======== */
+    .config-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      position: sticky;
+      top: 24px;
+    }
+    .config-panel h2 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .config-panel h2 svg {
+      width: 18px;
+      height: 18px;
+      color: var(--accent);
+    }
+    .config-group {
+      margin-bottom: 18px;
+    }
+    .config-group:last-child {
+      margin-bottom: 0;
+    }
+    .config-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .config-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Layout selector */
+    .layout-selector {
+      display: flex;
+      gap: 8px;
+    }
+    .layout-option {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 8px;
+      background: var(--page-bg);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .layout-option:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .layout-option.active {
+      border-color: var(--accent);
+      background: rgba(66,133,244,0.06);
+      color: var(--accent);
+    }
+    .layout-option svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    /* Toggle switch */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--border);
+      border-radius: 24px;
+      transition: 0.3s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background: var(--accent);
+    }
+    .toggle-switch input:checked + .toggle-slider::before {
+      transform: translateX(20px);
+    }
+    .toggle-switch input:focus + .toggle-slider {
+      box-shadow: 0 0 0 3px rgba(66,133,244,0.3);
+    }
+
+    /* Divider */
+    .config-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
+    /* ======== Embed Code ======== */
+    .embed-section {
+      margin-top: 24px;
+    }
+    .embed-section h3 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .embed-section h3 svg {
+      width: 16px;
+      height: 16px;
+      color: var(--accent);
+    }
+    .code-block {
+      background: var(--code-bg);
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+      position: relative;
+    }
+    .code-block pre {
+      margin: 0;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--code-text);
+      white-space: pre;
+    }
+    .code-block .token-tag { color: #89B4FA; }
+    .code-block .token-attr { color: #A6E3A1; }
+    .code-block .token-string { color: #F9E2AF; }
+    .code-block .token-comment { color: #6C7086; }
+    .code-block .token-key { color: #CBA6F7; }
+    .code-block .token-value { color: #FAB387; }
+
+    .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: var(--font);
+    }
+    .copy-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    .copy-btn.copied {
+      background: #34A853;
+      border-color: #34A853;
+    }
+
+    /* ======== Preview Area ======== */
+    .preview-area {
+      min-width: 0;
+    }
+    .preview-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+    .preview-label::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #34A853;
+      animation: pulse-green 2s ease-in-out infinite;
+    }
+    @keyframes pulse-green {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .widget-preview {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow-md);
+    }
+
+    /* ======== Instructions Section ======== */
+    .instructions {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+    .instructions h2 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 32px;
+      text-align: center;
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    @media (max-width: 768px) {
+      .steps-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .step-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+    }
+    .step-number {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .step-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .step-card p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .step-card code {
+      background: var(--page-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--accent);
+    }
+    .step-card a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .step-card a:hover {
+      text-decoration: underline;
+    }
+
+    /* ======== Footer ======== */
+    .page-footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+    .page-footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    /* ======== Demo mode badge ======== */
+    .demo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #FEF3C7;
+      border: 1px solid #FDE68A;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #92400E;
+      margin-bottom: 16px;
+    }
+    .demo-badge svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* ======== Select ======== */
+    .config-select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: var(--font);
+      font-size: 13px;
+      color: var(--text);
+      background: var(--page-bg);
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+    .config-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(66,133,244,0.15);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ======== Hero ======== -->
+  <header class="hero">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        Open Source Widget &middot; v2.0
+      </div>
+      <h1>Google Reviews <span>Widget</span></h1>
+      <p>A self-contained, embeddable JavaScript widget that displays live Google reviews on any website. Drop in one script tag and go.</p>
+    </div>
+  </header>
+
+  <!-- ======== Main Content ======== -->
+  <main class="main">
+    <div class="two-col">
+
+      <!-- Config Panel -->
+      <aside class="config-panel" aria-label="Widget configuration">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Configuration
+        </h2>
+
+        <!-- Layout -->
+        <div class="config-group">
+          <label class="config-label">Layout</label>
+          <div class="layout-selector">
+            <button class="layout-option active" data-layout="carousel" aria-label="Carousel layout">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="4" x2="8" y2="20"/><line x1="16" y1="4" x2="16" y2="20"/></svg>
+              Carousel
+            </button>
+            <button class="layout-option" data-layout="grid" aria-label="Grid layout">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              Grid
+            </button>
+            <button class="layout-option" data-layout="list" aria-label="List layout">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>
+              List
+            </button>
+          </div>
+        </div>
+
+        <hr class="config-divider">
+
+        <!-- Autoplay toggle -->
+        <div class="config-group">
+          <div class="toggle-row">
+            <label class="config-label" for="toggle-autoplay" style="margin-bottom:0;">Autoplay (Carousel)</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-autoplay" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="config-hint">Auto-advance slides every 5 seconds</p>
+        </div>
+
+        <!-- Show Header toggle -->
+        <div class="config-group">
+          <div class="toggle-row">
+            <label class="config-label" for="toggle-header" style="margin-bottom:0;">Show Header</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-header" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="config-hint">Display business name, rating, and review count</p>
+        </div>
+
+        <!-- Max Reviews -->
+        <div class="config-group">
+          <label class="config-label" for="select-max-reviews">Max Reviews</label>
+          <select class="config-select" id="select-max-reviews">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+          </select>
+          <p class="config-hint">Google Places API returns up to 5 reviews</p>
+        </div>
+
+        <!-- Min Rating -->
+        <div class="config-group">
+          <label class="config-label" for="select-min-rating">Minimum Rating</label>
+          <select class="config-select" id="select-min-rating">
+            <option value="0" selected>Show all</option>
+            <option value="3">3+ stars</option>
+            <option value="4">4+ stars</option>
+            <option value="5">5 stars only</option>
+          </select>
+          <p class="config-hint">Filter reviews below this star rating</p>
+        </div>
+
+        <hr class="config-divider">
+
+        <!-- Embed Code -->
+        <div class="embed-section">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Embed Code
+          </h3>
+          <div class="code-block">
+            <button class="copy-btn" id="copy-btn">Copy</button>
+            <pre id="embed-code"></pre>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Preview Area -->
+      <section class="preview-area">
+        <div class="preview-label">Live Preview</div>
+        <div class="demo-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Demo Mode — Using sample data. Add your API key &amp; Place ID for live reviews.
+        </div>
+        <div class="widget-preview">
+          <div id="google-reviews"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ======== Setup Instructions ======== -->
+  <section class="instructions" aria-label="Setup instructions">
+    <h2>How to Set Up</h2>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-number">1</div>
+        <h3>Deploy the Proxy</h3>
+        <p>Deploy the included Cloud Function to <a href="https://console.cloud.google.com/functions" target="_blank" rel="noopener">Google Cloud Functions</a>. Set your Google API key as an environment variable. Your key stays server-side and is never exposed in client code.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">2</div>
+        <h3>Find Your Place ID</h3>
+        <p>Use the <a href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank" rel="noopener">Place ID Finder</a> to look up your business, or call the proxy's <code>/find</code> endpoint with your business name.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">3</div>
+        <h3>Embed the Widget</h3>
+        <p>Copy the embed code from the panel above. Replace the proxy URL and Place ID. Paste it into your website's HTML. Your API key never touches the browser.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== Footer ======== -->
+  <footer class="page-footer">
+    Google Reviews Widget v2.0 &middot; Built by <a href="https://www.aiconsultantpros.com" target="_blank" rel="noopener">AI Consultant Pros</a> &middot; Uses the Google Places API
+  </footer>
+
+  <!-- ======== Widget Script ======== -->
+  <script src="google-reviews-widget.js"></script>
+
+  <!-- ======== Demo Page Logic ======== -->
+  <script>
+    (function () {
+      'use strict';
+
+      // Current config state
+      var config = {
+        layout: 'carousel',
+        autoplay: true,
+        showHeader: true,
+        maxReviews: 5,
+        minRating: 0,
+      };
+
+      var widget = null;
+
+      function initWidget() {
+        if (widget) {
+          widget.destroy();
+        }
+        widget = GoogleReviewsWidget.init({
+          container: '#google-reviews',
+          proxyUrl: 'https://google-reviews-proxy-980757474656.us-east1.run.app',
+          placeId: 'ChIJezMhGqJRFIgRNwgyBEWH4qU',
+          layout: config.layout,
+          showHeader: config.showHeader,
+          autoplay: config.autoplay,
+          autoplaySpeed: 5000,
+          maxReviews: config.maxReviews,
+          minRating: config.minRating,
+        });
+      }
+
+      function updateEmbedCode() {
+        var lines = [];
+        lines.push('<span class="token-comment">&lt;!-- Google Reviews Widget (Secure Proxy Mode) --&gt;</span>');
+        lines.push('<span class="token-tag">&lt;div</span> <span class="token-attr">id</span>=<span class="token-string">"google-reviews"</span><span class="token-tag">&gt;&lt;/div&gt;</span>');
+        lines.push('<span class="token-tag">&lt;script</span> <span class="token-attr">src</span>=<span class="token-string">"https://google-reviews-proxy-980757474656.us-east1.run.app/widget.js"</span><span class="token-tag">&gt;&lt;/script&gt;</span>');
+        lines.push('<span class="token-tag">&lt;script&gt;</span>');
+        lines.push('  GoogleReviewsWidget.<span class="token-attr">init</span>({');
+        lines.push('    <span class="token-key">container</span>: <span class="token-string">\'#google-reviews\'</span>,');
+        lines.push('    <span class="token-key">proxyUrl</span>: <span class="token-string">\'https://google-reviews-proxy-980757474656.us-east1.run.app\'</span>,');
+        lines.push('    <span class="token-key">placeId</span>: <span class="token-string">\'ChIJezMhGqJRFIgRNwgyBEWH4qU\'</span>,');
+        lines.push('    <span class="token-key">layout</span>: <span class="token-string">\'' + config.layout + '\'</span>,');
+        lines.push('    <span class="token-key">showHeader</span>: <span class="token-value">' + config.showHeader + '</span>,');
+        lines.push('    <span class="token-key">autoplay</span>: <span class="token-value">' + config.autoplay + '</span>,');
+        if (config.maxReviews !== 5) {
+          lines.push('    <span class="token-key">maxReviews</span>: <span class="token-value">' + config.maxReviews + '</span>,');
+        }
+        if (config.minRating > 0) {
+          lines.push('    <span class="token-key">minRating</span>: <span class="token-value">' + config.minRating + '</span>,');
+        }
+        lines.push('  });');
+        lines.push('<span class="token-tag">&lt;/script&gt;</span>');
+
+        document.getElementById('embed-code').innerHTML = lines.join('\n');
+      }
+
+      // Layout buttons
+      document.querySelectorAll('.layout-option').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          document.querySelectorAll('.layout-option').forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          config.layout = btn.getAttribute('data-layout');
+          initWidget();
+          updateEmbedCode();
+        });
+      });
+
+      // Autoplay toggle
+      document.getElementById('toggle-autoplay').addEventListener('change', function () {
+        config.autoplay = this.checked;
+        initWidget();
+        updateEmbedCode();
+      });
+
+      // Show header toggle
+      document.getElementById('toggle-header').addEventListener('change', function () {
+        config.showHeader = this.checked;
+        initWidget();
+        updateEmbedCode();
+      });
+
+      // Max reviews select
+      document.getElementById('select-max-reviews').addEventListener('change', function () {
+        config.maxReviews = parseInt(this.value, 10);
+        initWidget();
+        updateEmbedCode();
+      });
+
+      // Min rating select
+      document.getElementById('select-min-rating').addEventListener('change', function () {
+        config.minRating = parseInt(this.value, 10);
+        initWidget();
+        updateEmbedCode();
+      });
+
+      // Copy button
+      document.getElementById('copy-btn').addEventListener('click', function () {
+        var code = document.getElementById('embed-code').textContent;
+        var btn = document.getElementById('copy-btn');
+
+        function onSuccess() {
+          btn.textContent = 'Copied!';
+          btn.classList.add('copied');
+          setTimeout(function () {
+            btn.textContent = 'Copy';
+            btn.classList.remove('copied');
+          }, 2000);
+        }
+
+        // Try modern clipboard API first, fall back to execCommand
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code).then(onSuccess).catch(function () {
+            fallbackCopy(code, onSuccess);
+          });
+        } else {
+          fallbackCopy(code, onSuccess);
+        }
+      });
+
+      function fallbackCopy(text, callback) {
+        var textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          document.execCommand('copy');
+          callback();
+        } catch (e) {
+          alert('Copy failed. Please select the code manually and press Ctrl+C.');
+        }
+        document.body.removeChild(textarea);
+      }
+
+      // Initialize
+      initWidget();
+      updateEmbedCode();
+    })();
+  </script>
+
+</body>
+</html>

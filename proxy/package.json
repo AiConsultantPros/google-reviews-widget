@@ -1,0 +1,12 @@
+{
+  "name": "google-reviews-proxy",
+  "version": "1.0.0",
+  "description": "Secure proxy for Google Places API reviews — hides API key server-side",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.0.0"
+  }
+}
