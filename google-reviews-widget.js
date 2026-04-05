@@ -270,15 +270,18 @@
   font-weight: 600;
   color: var(--grw-text);
   margin: 0;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 .grw-card-meta {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 2px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .grw-card-stars {
   display: flex;
@@ -293,6 +296,9 @@
 .grw-card-time {
   font-size: 12px;
   color: var(--grw-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .grw-card-text {
   font-size: 14px;
@@ -598,6 +604,18 @@
   }
   .grw-card {
     padding: 16px;
+  }
+  .grw-carousel-slide {
+    padding: 0 32px;
+  }
+  .grw-card-header {
+    gap: 10px;
+  }
+  .grw-author-name {
+    font-size: 14px;
+  }
+  .grw-card-meta {
+    gap: 4px;
   }
 }
 
