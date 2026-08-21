@@ -146,7 +146,7 @@ Once deployed, update your widget embed code to use `proxyUrl` instead of `apiKe
 
 ```html
 <div id="google-reviews"></div>
-<script src="google-reviews-widget.js"></script>
+<script src="https://YOUR_PROXY_URL/widget.js"></script>
 <script>
   GoogleReviewsWidget.init({
     container: '#google-reviews',
@@ -158,6 +158,8 @@ Once deployed, update your widget embed code to use `proxyUrl` instead of `apiKe
   });
 </script>
 ```
+
+The same proxy URL serves both the widget asset (`/widget.js`) and review data (`/reviews`), so embeds do not depend on GitHub Pages.
 
 ## Configuration
 

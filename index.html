@@ -636,6 +636,8 @@
     (function () {
       'use strict';
 
+      var PROXY_URL = 'https://google-reviews-proxy-980757474656.us-east1.run.app';
+
       // Current config state
       var config = {
         layout: 'carousel',
@@ -653,7 +655,7 @@
         }
         widget = GoogleReviewsWidget.init({
           container: '#google-reviews',
-          proxyUrl: 'https://google-reviews-proxy-980757474656.us-east1.run.app',
+          proxyUrl: PROXY_URL,
           placeId: 'ChIJezMhGqJRFIgRNwgyBEWH4qU',
           layout: config.layout,
           showHeader: config.showHeader,
@@ -668,11 +670,11 @@
         var lines = [];
         lines.push('<span class="token-comment">&lt;!-- Google Reviews Widget (Secure Proxy Mode) --&gt;</span>');
         lines.push('<span class="token-tag">&lt;div</span> <span class="token-attr">id</span>=<span class="token-string">"google-reviews"</span><span class="token-tag">&gt;&lt;/div&gt;</span>');
-        lines.push('<span class="token-tag">&lt;script</span> <span class="token-attr">src</span>=<span class="token-string">"https://aiconsultantpros.github.io/google-reviews-widget/google-reviews-widget.js"</span><span class="token-tag">&gt;&lt;/script&gt;</span>');
+        lines.push('<span class="token-tag">&lt;script</span> <span class="token-attr">src</span>=<span class="token-string">"' + PROXY_URL + '/widget.js"</span><span class="token-tag">&gt;&lt;/script&gt;</span>');
         lines.push('<span class="token-tag">&lt;script&gt;</span>');
         lines.push('  GoogleReviewsWidget.<span class="token-attr">init</span>({');
         lines.push('    <span class="token-key">container</span>: <span class="token-string">\'#google-reviews\'</span>,');
-        lines.push('    <span class="token-key">proxyUrl</span>: <span class="token-string">\'https://google-reviews-proxy-980757474656.us-east1.run.app\'</span>,');
+        lines.push('    <span class="token-key">proxyUrl</span>: <span class="token-string">\'' + PROXY_URL + '\'</span>,');
         lines.push('    <span class="token-key">placeId</span>: <span class="token-string">\'ChIJezMhGqJRFIgRNwgyBEWH4qU\'</span>,');
         lines.push('    <span class="token-key">layout</span>: <span class="token-string">\'' + config.layout + '\'</span>,');
         lines.push('    <span class="token-key">showHeader</span>: <span class="token-value">' + config.showHeader + '</span>,');

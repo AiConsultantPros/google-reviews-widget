@@ -90,17 +90,21 @@ functions.http('googleReviewsProxy', async (req, res) => {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const requestPath = req.path || '/';
+
+  // The widget is a public static asset. It must remain available even if the
+  // Places API configuration is temporarily unavailable or being rotated.
+  if (requestPath === '/widget.js' || requestPath.startsWith('/widget.js')) {
+    return handleWidgetJS(req, res);
+  }
+
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'Server misconfigured: missing API key' });
   }
 
-  const path = req.path || '/';
-
   try {
-    if (path === '/widget.js' || path.startsWith('/widget.js')) {
-      return handleWidgetJS(req, res);
-    } else if (path === '/find' || path.startsWith('/find')) {
+    if (requestPath === '/find' || requestPath.startsWith('/find')) {
       return await handleFind(req, res, apiKey);
     } else {
       return await handleReviews(req, res, apiKey);

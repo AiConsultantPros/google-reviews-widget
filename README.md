@@ -21,7 +21,7 @@ Deploy the proxy server first (see `google-reviews-proxy/`), then:
 
 ```html
 <div id="google-reviews"></div>
-<script src="google-reviews-widget.js"></script>
+<script src="https://YOUR_CLOUD_FUNCTION_URL/widget.js"></script>
 <script>
   GoogleReviewsWidget.init({
     container: '#google-reviews',
@@ -33,6 +33,8 @@ Deploy the proxy server first (see `google-reviews-proxy/`), then:
   });
 </script>
 ```
+
+The proxy serves the widget script at `/widget.js`, so the embed stays on a URL you control rather than depending on a GitHub Pages deployment.
 
 ## Quick Start (Direct — API Key in Client)
 
