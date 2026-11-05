@@ -14,8 +14,26 @@ A self-contained, embeddable JavaScript widget that displays live Google reviews
 - **Namespaced CSS** — All classes prefixed with `grw-` to avoid conflicts
 - **Accessible** — Keyboard navigation, ARIA labels, focus management
 - **Google attribution** — Compliant with Google's Terms of Service
+- **Self-healing (v2.1)** — Puts itself back if a page builder wipes or re-renders it, waits for late containers, retries slow requests, and shows the last good reviews if the proxy is down
 
-## Quick Start (Secure — Recommended)
+## Quick Start (Self-Healing — Recommended)
+
+One `<div>` and one `<script>`. No inline `init()` call, so there's no race if your site builder loads scripts out of order.
+
+```html
+<div data-grw-place-id="YOUR_PLACE_ID" data-grw-layout="carousel"></div>
+<script src="https://YOUR_PROXY_URL/widget.js" async></script>
+```
+
+The proxy URL defaults to wherever `widget.js` was loaded from. Optional attributes: `data-grw-proxy-url`, `data-grw-show-header="false"`, `data-grw-autoplay="false"`, `data-grw-autoplay-speed`, `data-grw-max-reviews`, `data-grw-min-rating`, `data-grw-theme`.
+
+**Why the widget used to disappear (fixed in v2.1):**
+1. Site builders re-render page sections after load, wiping the widget. It now checks every second and redraws itself.
+2. If `widget.js` loaded after the inline `init()` ran, you got `GoogleReviewsWidget is not defined`. The data-attribute embed has no inline code.
+3. A container added late (lazy sections, page navigation) gave "Container not found". The widget now waits for it.
+4. A cold start or Google hiccup showed an error. It now retries 3 times, keeps the last good copy in the browser for 3 days, and the proxy serves its last good copy if Google fails.
+
+## Quick Start (Script — via proxy)
 
 Deploy the proxy server first (see `google-reviews-proxy/`), then:
 

@@ -43,6 +43,8 @@ if grep -q "YOUR_GOOGLE_API_KEY" .env.yaml; then
 fi
 
 # Deploy
+# min-instances=1 keeps one copy awake: no cold starts, and the in-memory
+# backup copy of your reviews survives between visits (roughly $3/month).
 gcloud functions deploy "$FUNCTION_NAME" \
   --gen2 \
   --region="$REGION" \
@@ -55,7 +57,7 @@ gcloud functions deploy "$FUNCTION_NAME" \
   --memory=256MiB \
   --timeout=30s \
   --max-instances=10 \
-  --min-instances=0
+  --min-instances=1
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

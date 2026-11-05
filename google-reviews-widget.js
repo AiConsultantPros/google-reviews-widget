@@ -1,9 +1,22 @@
 /**
- * Google Reviews Widget v2.0.0
+ * Google Reviews Widget v2.1.0
  * A self-contained, embeddable widget for displaying Google Reviews
  * https://github.com/AiConsultantPros/google-reviews-widget
  *
- * Usage (Secure — via proxy server, recommended):
+ * Usage (Recommended — self-healing, no inline script needed):
+ *   <div data-grw-place-id="YOUR_PLACE_ID" data-grw-layout="carousel"></div>
+ *   <script src="https://YOUR_PROXY_URL/widget.js" async></script>
+ *
+ *   The proxy URL defaults to wherever widget.js was loaded from. Optional
+ *   attributes: data-grw-proxy-url, data-grw-show-header, data-grw-autoplay,
+ *   data-grw-autoplay-speed, data-grw-max-reviews, data-grw-min-rating,
+ *   data-grw-theme.
+ *
+ *   Self-healing: if a page builder wipes or re-renders the container, the
+ *   widget puts itself back within about a second. The last good reviews are
+ *   saved in the browser, so a slow or failed proxy never leaves a blank gap.
+ *
+ * Usage (Script — via proxy server):
  *   GoogleReviewsWidget.init({
  *     container: '#google-reviews',
  *     proxyUrl: 'https://YOUR_CLOUD_FUNCTION_URL',
@@ -21,6 +34,34 @@
  */
 (function () {
   'use strict';
+
+  // Page builders sometimes inject the same script twice (or re-run it on
+  // page navigation). The first copy keeps running and auto-mounts any new
+  // containers, so a second copy has nothing to do.
+  if (window.GoogleReviewsWidget && window.GoogleReviewsWidget._selfHealing) {
+    return;
+  }
+
+  // Where this script was loaded from. Used as the default proxyUrl so the
+  // data-attribute embed only needs a Place ID.
+  var SCRIPT_ORIGIN = (function () {
+    try {
+      var s = document.currentScript;
+      if (!s || !s.src) {
+        var all = document.querySelectorAll('script[src*="widget.js"]');
+        s = all[all.length - 1];
+      }
+      return s && s.src ? new URL(s.src, location.href).origin : '';
+    } catch (e) {
+      return '';
+    }
+  })();
+
+  var CACHE_PREFIX = 'grw:v2:';
+  var CACHE_MAX_AGE = 72 * 60 * 60 * 1000; // show a saved copy for up to 3 days if the proxy is down
+  var FETCH_TIMEOUT = 10000; // long enough for a Cloud Run cold start
+  var RETRY_DELAYS = [0, 2000, 6000]; // three attempts
+  var HEAL_LIMIT = 15; // max repairs per minute, so we never fight a page builder forever
 
   /* ========================================================================
    * DEMO DATA
@@ -570,6 +611,28 @@
   border-radius: var(--grw-radius-card);
 }
 
+/* ---- Fallback (proxy unreachable, nothing saved) ---- */
+.grw-fallback {
+  text-align: center;
+  padding: 20px 16px;
+}
+.grw-fallback-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--grw-text);
+  text-decoration: none;
+}
+.grw-fallback-link:hover {
+  text-decoration: underline;
+}
+.grw-fallback-link svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* ---- Error State ---- */
 .grw-error {
   text-align: center;
@@ -835,22 +898,87 @@
     this.modalEl = null;
     this.reviews = [];
     this._bodyOverflow = '';
+    this._state = 'loading'; // loading | ready | fallback | error
+    this._errorMessage = '';
+    this._destroyed = false;
+    this._healTimes = [];
+    this._detachedTicks = 0;
 
-    // Resolve container
-    if (typeof this.config.container === 'string') {
-      this.containerEl = document.querySelector(this.config.container);
+    this._injectCSS();
+
+    // Resolve container. If it isn't on the page yet (page builders often
+    // render sections late), the self-healing loop attaches it when it shows up.
+    var el = typeof this.config.container === 'string'
+      ? document.querySelector(this.config.container)
+      : this.config.container;
+    if (el) {
+      this._attach(el);
     } else {
-      this.containerEl = this.config.container;
+      console.warn('GoogleReviewsWidget: waiting for container', this.config.container);
     }
 
-    if (!this.containerEl) {
-      console.error('GoogleReviewsWidget: Container not found:', this.config.container);
+    this._init();
+  }
+
+  // Bind this widget to a container element. If another widget already
+  // lives there (the embed code ran twice), that one is shut down first.
+  Widget.prototype._attach = function (el) {
+    if (el.__grw && el.__grw !== this) {
+      el.__grw.destroy();
+    }
+    this.containerEl = el;
+    this._detachedTicks = 0;
+    el.__grw = this;
+    el.setAttribute('data-grw-mounted', '');
+    this._paint();
+  };
+
+  Widget.prototype._canPaint = function () {
+    return !this._destroyed && this.containerEl && this.containerEl.isConnected;
+  };
+
+  // Redraw whatever state we're in. Used after a page builder wipes or
+  // replaces the container.
+  Widget.prototype._paint = function () {
+    if (!this._canPaint()) return;
+    switch (this._state) {
+      case 'ready': return this._render();
+      case 'fallback': return this._renderFallback();
+      case 'error': return this._renderError(this._errorMessage);
+      default: return this._renderLoading();
+    }
+  };
+
+  // Called about once a second by the global loop. Puts the widget back if
+  // something removed it.
+  Widget.prototype._heal = function () {
+    if (this._destroyed) return;
+
+    if (!this.containerEl || !this.containerEl.isConnected) {
+      if (typeof this.config.container === 'string') {
+        var found = document.querySelector(this.config.container);
+        if (!found) return; // page is mid-render or navigating; check again next tick
+        if (found.__grw && found.__grw !== this) {
+          this.destroy(true); // a newer widget owns it now
+          return;
+        }
+        this._attach(found);
+        return;
+      }
+      // Element-based container was removed. Give it 60s to come back
+      // (some frameworks detach and re-insert nodes), then clean up.
+      if (++this._detachedTicks > 60) this.destroy(true);
       return;
     }
 
-    this._injectCSS();
-    this._init();
-  }
+    if (this.containerEl.querySelector('.grw-container')) return; // all good
+
+    var now = Date.now();
+    this._healTimes = this._healTimes.filter(function (t) { return now - t < 60000; });
+    if (this._healTimes.length >= HEAL_LIMIT) return;
+    this._healTimes.push(now);
+    this._paint();
+  };
 
   Widget.prototype._injectCSS = function () {
     if (document.getElementById('grw-styles')) return;
@@ -863,15 +991,22 @@
   Widget.prototype._init = function () {
     var self = this;
 
-    // Show loading state
-    this._renderLoading();
-
     // Priority: proxyUrl > apiKey > demo data
     if (this.config.proxyUrl && this.config.placeId) {
-      // SECURE MODE: Fetch via proxy server (API key stays server-side)
+      // SECURE MODE: Fetch via proxy server (API key stays server-side).
+      // Show the last good copy instantly, then refresh it in the background.
+      var saved = readSaved(this.config.placeId);
+      if (saved) {
+        this._setData(saved);
+      } else {
+        this._renderLoading();
+      }
       this._fetchViaProxy();
       return;
     }
+
+    // Show loading state
+    this._renderLoading();
 
     if (this.config.apiKey && this.config.placeId) {
       // DIRECT MODE: Use Google Maps JavaScript API (API key in client)
@@ -893,40 +1028,57 @@
   Widget.prototype._fetchViaProxy = function () {
     var self = this;
     var url = this.config.proxyUrl.replace(/\/$/, '') + '/reviews?placeId=' + encodeURIComponent(this.config.placeId);
+    var attempt = 0;
 
-    fetch(url)
-      .then(function (response) {
-        if (!response.ok) {
-          throw new Error('Proxy returned status ' + response.status);
-        }
-        return response.json();
-      })
-      .then(function (data) {
-        self.data = {
-          name: data.name || '',
-          rating: data.rating || 0,
-          userRatingsTotal: data.userRatingsTotal || 0,
-          mapsUrl: data.mapsUrl || '',
-          photoUrl: '',
-          reviews: (data.reviews || []).map(function (r) {
-            return {
-              authorName: r.authorName || 'Anonymous',
-              profilePhotoUrl: r.profilePhotoUrl || '',
-              rating: r.rating || 0,
-              relativeTimeDescription: r.relativeTimeDescription || '',
-              text: r.text || '',
-              authorUrl: r.authorUrl || '#',
-            };
-          }),
-        };
+    function tryOnce() {
+      if (self._destroyed) return;
+      fetchWithTimeout(url, FETCH_TIMEOUT)
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error('Proxy returned status ' + response.status);
+          }
+          return response.json();
+        })
+        .then(function (raw) {
+          if (self._destroyed) return;
+          var data = normalizeProxyData(raw);
 
-        self.reviews = self._filterReviews(self.data.reviews);
-        self._render();
-      })
-      .catch(function (err) {
-        console.error('GoogleReviewsWidget proxy error:', err);
-        self._renderError('Could not fetch reviews via proxy. Check your proxy URL and Place ID.');
-      });
+          // Google occasionally answers without the reviews list. Don't let
+          // that blank out reviews we already have.
+          if (!data.reviews.length && self.data && self.data.reviews && self.data.reviews.length) {
+            data.reviews = self.data.reviews;
+          }
+
+          writeSaved(self.config.placeId, data);
+
+          // Only redraw if something changed, so the carousel doesn't jump.
+          if (self._state !== 'ready' || JSON.stringify(data) !== JSON.stringify(self.data)) {
+            self._setData(data);
+          }
+        })
+        .catch(function (err) {
+          if (self._destroyed) return;
+          attempt++;
+          if (attempt < RETRY_DELAYS.length) {
+            setTimeout(tryOnce, RETRY_DELAYS[attempt]);
+            return;
+          }
+          console.warn('GoogleReviewsWidget: proxy unreachable after ' + attempt + ' tries:', err);
+          // Keep showing the saved copy if we have one. Otherwise show a
+          // simple link to Google instead of an error box.
+          if (self._state !== 'ready') {
+            self._renderFallback();
+          }
+        });
+    }
+
+    tryOnce();
+  };
+
+  Widget.prototype._setData = function (data) {
+    this.data = data;
+    this.reviews = this._filterReviews(data.reviews || []);
+    this._render();
   };
 
   Widget.prototype._loadGoogleMapsAPI = function (callback) {
@@ -1034,7 +1186,11 @@
   /* ========================================================================
    * RENDERING
    * ======================================================================== */
+  // Each render function records its state first, so the self-healing loop
+  // can redraw it later, and does nothing while the container is missing.
   Widget.prototype._renderLoading = function () {
+    this._state = 'loading';
+    if (!this._canPaint()) return;
     this.containerEl.innerHTML = '';
     var container = el('div', { className: 'grw-container', 'aria-busy': 'true', 'aria-label': 'Loading reviews' });
     container.appendChild(el('div', { className: 'grw-skeleton grw-skeleton-header' }));
@@ -1042,7 +1198,27 @@
     this.containerEl.appendChild(container);
   };
 
+  // Shown only when the proxy can't be reached and nothing is saved. A plain
+  // link to Google is better than an empty gap or a scary error box.
+  Widget.prototype._renderFallback = function () {
+    this._state = 'fallback';
+    if (!this._canPaint()) return;
+    this.containerEl.innerHTML = '';
+    var container = el('div', { className: 'grw-container grw-fallback' });
+    container.appendChild(el('a', {
+      className: 'grw-fallback-link',
+      href: 'https://www.google.com/maps/place/?q=place_id:' + encodeURIComponent(this.config.placeId || ''),
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      innerHTML: ICONS.googleLogo + '<span>See our reviews on Google</span>' + ICONS.arrowRight,
+    }));
+    this.containerEl.appendChild(container);
+  };
+
   Widget.prototype._renderError = function (message) {
+    this._state = 'error';
+    this._errorMessage = message;
+    if (!this._canPaint()) return;
     this.containerEl.innerHTML = '';
     var container = el('div', { className: 'grw-container' });
     var errorEl = el('div', { className: 'grw-error' });
@@ -1055,6 +1231,8 @@
 
   Widget.prototype._render = function () {
     var self = this;
+    this._state = 'ready';
+    if (!this._canPaint()) return;
     this.containerEl.innerHTML = '';
 
     var container = el('div', { className: 'grw-container', role: 'region', 'aria-label': 'Google Reviews for ' + (this.data.name || 'this business') });
@@ -1431,32 +1609,146 @@
     this._render();
   };
 
-  Widget.prototype.destroy = function () {
+  // keepDom: leave the container's HTML alone (used when a newer widget has
+  // already taken over the same spot).
+  Widget.prototype.destroy = function (keepDom) {
+    this._destroyed = true;
     this._stopAutoplay();
     this._closeModal();
     if (this.containerEl) {
-      this.containerEl.innerHTML = '';
+      if (this.containerEl.__grw === this) {
+        delete this.containerEl.__grw;
+        this.containerEl.removeAttribute('data-grw-mounted');
+      }
+      if (!keepDom) this.containerEl.innerHTML = '';
     }
   };
+
+  /* ========================================================================
+   * HELPERS — network, saved copy, data-attribute config
+   * ======================================================================== */
+  function fetchWithTimeout(url, ms) {
+    if (typeof AbortController === 'undefined') return fetch(url);
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, ms);
+    return fetch(url, { signal: ctrl.signal }).then(
+      function (res) { clearTimeout(timer); return res; },
+      function (err) { clearTimeout(timer); throw err; }
+    );
+  }
+
+  // Last good response, kept in the visitor's browser so a slow or failed
+  // proxy call never leaves a blank space.
+  function readSaved(placeId) {
+    try {
+      var raw = window.localStorage.getItem(CACHE_PREFIX + placeId);
+      if (!raw) return null;
+      var entry = JSON.parse(raw);
+      if (!entry || !entry.data || Date.now() - entry.savedAt > CACHE_MAX_AGE) return null;
+      return entry.data;
+    } catch (e) {
+      return null; // private mode, storage blocked, or bad JSON
+    }
+  }
+
+  function writeSaved(placeId, data) {
+    try {
+      window.localStorage.setItem(CACHE_PREFIX + placeId, JSON.stringify({ savedAt: Date.now(), data: data }));
+    } catch (e) {
+      /* storage full or blocked; the widget still works without it */
+    }
+  }
+
+  function normalizeProxyData(data) {
+    return {
+      name: data.name || '',
+      rating: data.rating || 0,
+      userRatingsTotal: data.userRatingsTotal || 0,
+      mapsUrl: data.mapsUrl || '',
+      photoUrl: '',
+      reviews: (data.reviews || []).map(function (r) {
+        return {
+          authorName: r.authorName || 'Anonymous',
+          profilePhotoUrl: r.profilePhotoUrl || '',
+          rating: r.rating || 0,
+          relativeTimeDescription: r.relativeTimeDescription || '',
+          text: r.text || '',
+          authorUrl: r.authorUrl || '#',
+        };
+      }),
+    };
+  }
+
+  // <div data-grw-place-id="..." data-grw-layout="carousel" ...></div>
+  function configFromElement(node) {
+    var d = node.dataset;
+    function bool(v, def) { return v == null ? def : !(v === 'false' || v === '0'); }
+    function num(v, def) { var n = parseFloat(v); return isNaN(n) ? def : n; }
+    return {
+      container: node,
+      placeId: d.grwPlaceId,
+      proxyUrl: d.grwProxyUrl || SCRIPT_ORIGIN,
+      layout: d.grwLayout || 'carousel',
+      theme: d.grwTheme || 'light',
+      showHeader: bool(d.grwShowHeader, true),
+      autoplay: bool(d.grwAutoplay, true),
+      autoplaySpeed: num(d.grwAutoplaySpeed, 5000),
+      maxReviews: num(d.grwMaxReviews, 5),
+      minRating: num(d.grwMinRating, 0),
+    };
+  }
 
   /* ========================================================================
    * GLOBAL API — window.GoogleReviewsWidget
    * ======================================================================== */
   var instances = [];
 
+  function init(config) {
+    var widget = new Widget(config);
+    instances.push(widget);
+    return widget;
+  }
+
+  // Mount any data-attribute containers that don't have a widget yet,
+  // including ones a page builder adds after navigation.
+  function autoMount() {
+    var nodes = document.querySelectorAll('[data-grw-place-id]');
+    for (var i = 0; i < nodes.length; i++) {
+      if (!nodes[i].__grw) init(configFromElement(nodes[i]));
+    }
+  }
+
+  // The self-healing loop. Runs about once a second and costs almost nothing:
+  // a couple of lookups per widget.
+  function tick() {
+    if (document.hidden) return;
+    try {
+      autoMount();
+      instances = instances.filter(function (w) { return !w._destroyed; });
+      instances.forEach(function (w) { w._heal(); });
+    } catch (e) {
+      console.warn('GoogleReviewsWidget: heal loop error', e);
+    }
+  }
+
+  setInterval(tick, 1000);
+  document.addEventListener('visibilitychange', tick);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tick);
+  } else {
+    tick();
+  }
+
   window.GoogleReviewsWidget = {
-    init: function (config) {
-      var widget = new Widget(config);
-      instances.push(widget);
-      return widget;
-    },
+    init: init,
     destroyAll: function () {
       instances.forEach(function (w) {
         w.destroy();
       });
       instances = [];
     },
-    version: '2.0.0',
+    version: '2.1.0',
+    _selfHealing: true,
     _DEMO_DATA: DEMO_DATA,
   };
 })();
