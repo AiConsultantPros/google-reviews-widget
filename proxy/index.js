@@ -12,6 +12,11 @@
  *   GOOGLE_API_KEY       — Your Google Maps Platform API key (required)
  *   ALLOWED_ORIGINS      — Comma-separated allowed origins for CORS (default: "*")
  *   CACHE_TTL_SECONDS    — How long to cache results in memory (default: 3600 = 1 hour)
+ *   ALLOWED_PLACE_IDS    — Optional comma-separated Place IDs this proxy will serve
+ *
+ * Reliability: if Google errors or times out, /reviews returns the last good
+ * copy (X-Cache: STALE) instead of an error. Deploy with min-instances=1 so
+ * that copy survives between visits.
  */
 
 const functions = require('@google-cloud/functions-framework');
@@ -30,7 +35,7 @@ function getWidgetJS() {
 // ─── /widget.js Endpoint ───────────────────────────────────────────────────────
 function handleWidgetJS(req, res) {
   res.set('Content-Type', 'application/javascript; charset=utf-8');
-  res.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+  res.set('Cache-Control', 'public, max-age=3600'); // 1 hour, so fixes reach visitors the same day
   res.set('Access-Control-Allow-Origin', '*');
   return res.send(getWidgetJS());
 }
@@ -39,11 +44,14 @@ function handleWidgetJS(req, res) {
 const cache = new Map();
 const CACHE_TTL = parseInt(process.env.CACHE_TTL_SECONDS || '3600', 10) * 1000;
 
-function getCached(key) {
+const GOOGLE_TIMEOUT_MS = 8000;
+
+// allowStale: return the entry even if it's past its TTL. Expired entries are
+// kept as a backup so a Google outage or quota error doesn't blank the widget.
+function getCached(key, allowStale = false) {
   const entry = cache.get(key);
   if (!entry) return null;
-  if (Date.now() - entry.timestamp > CACHE_TTL) {
-    cache.delete(key);
+  if (!allowStale && Date.now() - entry.timestamp > CACHE_TTL) {
     return null;
   }
   return entry.data;
@@ -65,11 +73,19 @@ function setCorsHeaders(req, res) {
   if (allowedOrigins === '*') {
     res.set('Access-Control-Allow-Origin', '*');
   } else {
-    const origins = allowedOrigins.split(',').map(o => o.trim());
+    // Allowing https://example.com also allows https://www.example.com (and
+    // the reverse). A missing www variant blocks the widget for every visitor
+    // who typed the other version of the address.
+    const origins = new Set();
+    allowedOrigins.split(',').map(o => o.trim()).filter(Boolean).forEach(o => {
+      origins.add(o);
+      origins.add(o.includes('://www.') ? o.replace('://www.', '://') : o.replace('://', '://www.'));
+    });
     const requestOrigin = req.get('Origin') || '';
-    if (origins.includes(requestOrigin)) {
+    if (origins.has(requestOrigin)) {
       res.set('Access-Control-Allow-Origin', requestOrigin);
     }
+    res.set('Vary', 'Origin');
   }
   
   res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -90,17 +106,21 @@ functions.http('googleReviewsProxy', async (req, res) => {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const path = req.path || '/';
+
+  // Serve the widget script even if the API key is misconfigured, so the
+  // widget can still show its saved copy or fallback link.
+  if (path === '/widget.js' || path.startsWith('/widget.js')) {
+    return handleWidgetJS(req, res);
+  }
+
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'Server misconfigured: missing API key' });
   }
 
-  const path = req.path || '/';
-
   try {
-    if (path === '/widget.js' || path.startsWith('/widget.js')) {
-      return handleWidgetJS(req, res);
-    } else if (path === '/find' || path.startsWith('/find')) {
+    if (path === '/find' || path.startsWith('/find')) {
       return await handleFind(req, res, apiKey);
     } else {
       return await handleReviews(req, res, apiKey);
@@ -123,6 +143,16 @@ async function handleReviews(req, res, apiKey) {
     return res.status(400).json({ error: 'Invalid placeId format' });
   }
 
+  // Optional lock: only serve the Place IDs you list, so nobody can run
+  // other businesses' lookups on your Google bill.
+  const allowedPlaceIds = (process.env.ALLOWED_PLACE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (allowedPlaceIds.length && !allowedPlaceIds.includes(placeId)) {
+    return res.status(403).json({ error: 'Place ID not allowed' });
+  }
+
+  // Browsers may reuse a response for 10 minutes.
+  res.set('Cache-Control', 'public, max-age=600');
+
   // Check cache
   const cacheKey = `reviews:${placeId}`;
   const cached = getCached(cacheKey);
@@ -131,7 +161,18 @@ async function handleReviews(req, res, apiKey) {
     return res.json(cached);
   }
 
-  // Fetch from Google Places API (New)
+  // If Google fails, answer with the last good copy instead of an error.
+  const serveStaleOr = (status, body) => {
+    const stale = getCached(cacheKey, true);
+    if (stale) {
+      res.set('X-Cache', 'STALE');
+      return res.json(stale);
+    }
+    res.set('Cache-Control', 'no-store');
+    return res.status(status).json(body);
+  };
+
+  // Fetch from Google Places API (New). Only the fields the widget uses.
   const fields = [
     'displayName',
     'rating',
@@ -139,23 +180,27 @@ async function handleReviews(req, res, apiKey) {
     'reviews',
     'formattedAddress',
     'googleMapsUri',
-    'photos'
   ].join(',');
 
   const url = `https://places.googleapis.com/v1/places/${placeId}?fields=${fields}&key=${apiKey}`;
-  
-  const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-    }
-  });
+
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
+    });
+  } catch (err) {
+    console.error('Google API unreachable or timed out:', err.message);
+    return serveStaleOr(504, { error: 'Google API timed out' });
+  }
 
   if (!response.ok) {
     const errorBody = await response.text();
     console.error(`Google API error (${response.status}):`, errorBody);
-    return res.status(response.status).json({ 
+    return serveStaleOr(502, {
       error: 'Google API request failed',
-      status: response.status 
+      status: response.status
     });
   }
 
@@ -181,9 +226,16 @@ async function handleReviews(req, res, apiKey) {
     fetchedAt: new Date().toISOString(),
   };
 
+  // Google sometimes answers without the reviews list. Keep the reviews we
+  // already had rather than showing an empty widget.
+  const previous = getCached(cacheKey, true);
+  if (!result.reviews.length && previous && previous.reviews && previous.reviews.length) {
+    result.reviews = previous.reviews;
+  }
+
   // Cache the result
   setCache(cacheKey, { ...result, cached: true });
-  
+
   res.set('X-Cache', 'MISS');
   return res.json(result);
 }
